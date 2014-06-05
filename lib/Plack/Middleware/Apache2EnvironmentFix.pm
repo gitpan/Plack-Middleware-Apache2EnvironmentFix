@@ -14,18 +14,7 @@ sub call {
     delete $ENV{MOD_PERL};
     delete $env->{MOD_PERL};
 
-    # Because we compile these modules under ModPerl::Registry,
-    # we munge the internals for the duration of the Plack request.
-    local $CGI::MOD_PERL         = 0;
-    local $CGI::Cookie::MOD_PERL = 0;
-
     my $res = $self->app->($env);
-
-    # CGI under mod_perl calls initialize_globals() at the end of
-    # each request, but CGI::Compile calls it only at the start.  If
-    # we want both in the same mod_perl process, we need to call it
-    # as cleanup too.
-    CGI::initialize_globals() if defined &CGI::initialize_globals;
 
     return $res;
 }
@@ -39,30 +28,37 @@ Plack::Middleware::Apache2EnvironmentFix - Hacks for Plack under Apache2
 
 =head1 DESCRIPTION
 
-When migrating your mod_perl site to run under Plack, you may wish to move
-part of your site to Plack at a time, rather than all at once.
+You may try to port your mod_perl site to Plack a bit at a time, by using
+L<Plack::Handler::Apache2>, rather than jumping straight to another option
+such as L<Starman>.
 
-In this situation, your Perl modules will be compiled under mod_perl in
-Apache's startup.pl, but then run under Plack.  Commonly used modules
-such as L<CGI> have optimizations for mod_perl environments, and certain
-things like redirects will fail to work under Plack.
+In this situation, if your Perl modules check $ENV{MOD_PERL} at runtime,
+then they will think they are running in a mod_perl environment.
 
-This middleware performs some ugly hacks to the Apache environment, allowing
-all this to work.
+This middleware deletes $ENV{MOD_PERL} at runtime, so that your code will
+behave the same as under any other PSGI environment.
 
-If you are running your entire site under Plack, then this middleware should
-become unnecessary, because all CPAN modules will be preloaded in a Plack
-environment, where $ENV{MOD_PERL} is not set.
+In future, the scope of this module could be extended to reset other
+environment variables, so that Apache2 more closely resembles the PSGI spec.
 
 =head1 CAVEATS
 
-Did I mention ugly hacks?  This includes overriding variables internal to
-L<CGI> and L<CGI::Cookie>.
+This module messes with %ENV by localizing it.  This seems to cause problems
+under at least some versions of mod_perl - %ENV does not stay localized.
 
-Your milage may vary; this middleware does not necessarily override all
-the modules on CPAN.
+One workaround we found for this was to change the core mod_perl handler:
+
+  SetHandler modperl
+
+But this caused us additional problems with bugs in L<CGI::Emulate::PSGI>
+version 0.15, where since STDIN was no longer tied to Apache's $r, any POST
+requests did not work.  Version 0.16 of that module introduced problems
+around tied filehandles, so at the time of writing we do not have a fix for
+this problem.
 
 =head1 SEE ALSO
+
+L<Plack::Middleware::Apache2CGIFix> for fixes specific to CGI.
 
 L<https://groups.google.com/d/msg/psgi-plack/HWrjb3DaZlk/27mQCxmf0r0J>
 

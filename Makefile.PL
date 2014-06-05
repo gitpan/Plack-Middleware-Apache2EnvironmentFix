@@ -20,9 +20,10 @@ my %WriteMakefileArgs = (
   "LICENSE" => "perl",
   "NAME" => "Plack::Middleware::Apache2EnvironmentFix",
   "PREREQ_PM" => {
-    "Plack" => 0
+    "Plack" => 0,
+    "parent" => 0
   },
-  "VERSION" => "0.001",
+  "VERSION" => "0.002",
   "test" => {
     "TESTS" => ""
   }
